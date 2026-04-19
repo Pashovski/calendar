@@ -124,13 +124,17 @@ function nextMonth() {
         <line x1="12" y1="17" x2="12" y2="27" stroke="#555" stroke-width="1.5" stroke-linecap="round" />
       </svg>
 
-      <p class="label">THIS WEEK</p>
+      <Transition name="card-swap" mode="out-in">
+        <div :key="apartment" class="card-content">
+          <p class="label">THIS WEEK</p>
 
-      <HandDrawnCircle :seed="apartment" class="apt-circle">
-        <p class="apartment-number">#{{ apartment }}</p>
-      </HandDrawnCircle>
+          <HandDrawnCircle :seed="apartment" class="apt-circle">
+            <p class="apartment-number">#{{ apartment }}</p>
+          </HandDrawnCircle>
 
-      <p class="range">{{ weekRange }}</p>
+          <p class="range">{{ weekRange }}</p>
+        </div>
+      </Transition>
     </div>
 
     <!-- Advance button -->
@@ -451,5 +455,28 @@ function nextMonth() {
 
 .out-of-month .duty-badge {
   opacity: 0.35;
+}
+
+/* ========== Card swap transition ========== */
+.card-content {
+  text-align: center;
+}
+
+.card-swap-leave-active {
+  transition: transform 400ms ease-out, opacity 400ms ease-out;
+}
+
+.card-swap-enter-active {
+  transition: transform 300ms ease-out, opacity 300ms ease-out;
+}
+
+.card-swap-leave-to {
+  transform: translateY(40px) rotate(4deg);
+  opacity: 0;
+}
+
+.card-swap-enter-from {
+  transform: translateY(-20px);
+  opacity: 0;
 }
 </style>
