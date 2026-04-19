@@ -48,6 +48,18 @@ export function useRotation() {
     save(state.value)
   }
 
+  function setApartment(apt: number) {
+    const ws = currentWeekStart(today.value)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const iso = `${ws.getFullYear()}-${pad(ws.getMonth() + 1)}-${pad(ws.getDate())}`
+    state.value = {
+      rotation: state.value.rotation,
+      anchorWeekStart: iso,
+      anchorApartment: apt,
+    }
+    save(state.value)
+  }
+
   return {
     state,
     apartment,
@@ -55,6 +67,7 @@ export function useRotation() {
     weekStart,
     nextApartment,
     advance,
+    setApartment,
     apartmentForWeek,
   }
 }

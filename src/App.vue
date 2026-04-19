@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useRotation } from '@/composables/useRotation'
 import { currentWeekStart } from '@/lib/dates'
+import { DEFAULT_ROTATION } from '@/lib/rotation'
 import HandDrawnCircle from '@/components/HandDrawnCircle.vue'
 
-const { state, apartment, weekRange, nextApartment, advance, apartmentForWeek } = useRotation()
+const { state, apartment, weekRange, nextApartment, advance, setApartment, apartmentForWeek } = useRotation()
 
 // --- advance confirmation ---
 const confirming = ref(false)
@@ -21,6 +22,43 @@ function confirmAdvance() {
 function cancelAdvance() {
   confirming.value = false
 }
+
+// --- long-press override modal ---
+const showOverride = ref(false)
+let pressTimer: ReturnType<typeof setTimeout> | null = null
+
+function onCardPointerDown() {
+  pressTimer = setTimeout(() => {
+    pressTimer = null
+    if (navigator.vibrate) navigator.vibrate(50)
+    showOverride.value = true
+  }, 3000)
+}
+
+function onCardPointerUp() {
+  if (pressTimer !== null) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}
+
+function selectOverride(apt: number) {
+  setApartment(apt)
+  showOverride.value = false
+}
+
+function dismissOverride(e: MouseEvent) {
+  if ((e.target as HTMLElement).classList.contains('overlay')) {
+    showOverride.value = false
+  }
+}
+
+onUnmounted(() => {
+  if (pressTimer !== null) clearTimeout(pressTimer)
+})
+
+// --- build stamp ---
+const buildStamp = `v1 \u00b7 ${__BUILD_DATE__}`
 
 // --- calendar ---
 const now = new Date()
@@ -115,7 +153,13 @@ function nextMonth() {
     <div class="corkboard-texture"></div>
 
     <!-- Main card -->
-    <div class="paper-card main-card">
+    <div
+      class="paper-card main-card"
+      @pointerdown.prevent="onCardPointerDown"
+      @pointerup="onCardPointerUp"
+      @pointerleave="onCardPointerUp"
+      @pointercancel="onCardPointerUp"
+    >
       <div class="paper-grain"></div>
       <!-- Thumbtack -->
       <svg class="thumbtack" width="24" height="28" viewBox="0 0 24 28" aria-hidden="true">
@@ -136,6 +180,24 @@ function nextMonth() {
         </div>
       </Transition>
     </div>
+
+    <!-- Long-press override modal -->
+    <Teleport to="body">
+      <div v-if="showOverride" class="overlay" @click="dismissOverride">
+        <div class="override-modal">
+          <p class="override-title">Set apartment</p>
+          <button
+            v-for="apt in DEFAULT_ROTATION"
+            :key="apt"
+            class="override-btn"
+            :class="{ 'override-btn--active': apt === apartment }"
+            @click="selectOverride(apt)"
+          >
+            {{ apt }}
+          </button>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Advance button -->
     <div class="advance">
@@ -190,6 +252,8 @@ function nextMonth() {
           </HandDrawnCircle>
         </div>
       </div>
+
+      <p class="build-stamp">{{ buildStamp }}</p>
     </div>
   </div>
 </template>
@@ -478,5 +542,70 @@ function nextMonth() {
 .card-swap-enter-from {
   transform: translateY(-20px);
   opacity: 0;
+}
+
+/* ========== Override modal ========== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.override-modal {
+  background: var(--color-paper);
+  border-radius: 6px;
+  padding: 1.25rem 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 180px;
+}
+
+.override-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-ink-muted);
+  margin-bottom: 0.25rem;
+}
+
+.override-btn {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  width: 100%;
+  padding: 0.45rem 0;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.override-btn:hover {
+  background: var(--color-paper-warm);
+}
+
+.override-btn--active {
+  color: var(--color-oxblood);
+  border-color: var(--color-oxblood);
+}
+
+/* ========== Build stamp ========== */
+.build-stamp {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-ink-muted);
+  text-align: right;
+  margin-top: 0.5rem;
 }
 </style>
