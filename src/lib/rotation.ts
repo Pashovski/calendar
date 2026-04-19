@@ -29,19 +29,18 @@ export function apartmentForWeek(state: RotationState, weekStart: Date): number 
 }
 
 /**
- * Returns a new state with the rotation advanced by one week.
+ * Returns a new state with the rotation advanced by one position.
+ * Pins the anchor to currentWeekStart(today) so the anchor never lags behind.
  */
-export function advance(state: RotationState): RotationState {
-  const anchorDate = parseLocalDate(state.anchorWeekStart)
-  const newDate = new Date(anchorDate)
-  newDate.setDate(newDate.getDate() + 7)
-
-  const anchorIndex = state.rotation.indexOf(state.anchorApartment)
-  const nextIndex = (anchorIndex + 1) % state.rotation.length
+export function advance(state: RotationState, today: Date = new Date()): RotationState {
+  const ws = currentWeekStart(today)
+  const currentApt = apartmentForWeek(state, ws)
+  const currentIndex = state.rotation.indexOf(currentApt)
+  const nextIndex = (currentIndex + 1) % state.rotation.length
   const nextApt = state.rotation[nextIndex]
 
   const pad = (n: number) => String(n).padStart(2, '0')
-  const iso = `${newDate.getFullYear()}-${pad(newDate.getMonth() + 1)}-${pad(newDate.getDate())}`
+  const iso = `${ws.getFullYear()}-${pad(ws.getMonth() + 1)}-${pad(ws.getDate())}`
 
   return {
     rotation: state.rotation,

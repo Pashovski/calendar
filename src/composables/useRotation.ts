@@ -39,12 +39,12 @@ export function useRotation() {
   const weekRange = computed(() => formatRange(weekStart.value))
 
   const nextApartment = computed(() => {
-    const next = advanceState(state.value)
+    const next = advanceState(state.value, today.value)
     return next.anchorApartment
   })
 
   function advance() {
-    state.value = advanceState(state.value)
+    state.value = advanceState(state.value, today.value)
     save(state.value)
   }
 

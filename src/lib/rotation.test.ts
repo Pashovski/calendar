@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { apartmentForWeek, advance, INITIAL_STATE, type RotationState } from './rotation'
-import { parseLocalDate } from './dates'
+import { apartmentForWeek, advance, INITIAL_STATE, DEFAULT_ROTATION, type RotationState } from './rotation'
+import { parseLocalDate, currentWeekStart } from './dates'
 
 const state = INITIAL_STATE // anchor: apt 7, week of 2026-04-11
 
@@ -42,34 +42,59 @@ describe('apartmentForWeek', () => {
 })
 
 describe('advance', () => {
-  it('moves to the next apartment and week', () => {
-    const next = advance(state)
+  // Use anchor Saturday as "today" so advance pins to that week
+  const anchorDay = parseLocalDate('2026-04-11')
+
+  it('moves to the next apartment', () => {
+    const next = advance(state, anchorDay)
     expect(next.anchorApartment).toBe(8)
-    expect(next.anchorWeekStart).toBe('2026-04-18')
+    expect(next.anchorWeekStart).toBe('2026-04-11')
   })
 
   it('wraps from 8 back to 1, skipping 6', () => {
     let s: RotationState = state
     // advance from apt 7 → 8 → 1
-    s = advance(s) // → 8
-    s = advance(s) // → 1
+    s = advance(s, anchorDay) // → 8
+    s = advance(s, anchorDay) // → 1
     expect(s.anchorApartment).toBe(1)
-    expect(s.anchorWeekStart).toBe('2026-04-25')
   })
 
   it('returns to starting apartment after 7 advances', () => {
     let s: RotationState = state
     for (let i = 0; i < 7; i++) {
-      s = advance(s)
+      s = advance(s, anchorDay)
     }
     expect(s.anchorApartment).toBe(7)
   })
 
-  it('advances week date by 7 days per call', () => {
+  it('advances the displayed apartment each call', () => {
     let s: RotationState = state
-    for (let i = 0; i < 3; i++) {
-      s = advance(s)
+    const expected = [8, 1, 2]
+    for (const apt of expected) {
+      s = advance(s, anchorDay)
+      expect(s.anchorApartment).toBe(apt)
     }
-    expect(s.anchorWeekStart).toBe('2026-05-02')
+  })
+
+  it('pins anchor to current week when anchor is stale (in the past)', () => {
+    // Anchor is 2 weeks behind "today"
+    const staleState: RotationState = {
+      rotation: [...DEFAULT_ROTATION],
+      anchorWeekStart: '2026-04-11', // apt 7
+      anchorApartment: 7,
+    }
+    // "today" is 2 weeks later — a Tuesday in the week of 2026-04-25
+    const today = parseLocalDate('2026-04-28') // Tuesday
+    // Current week start = 2026-04-25 (Saturday)
+    // apartmentForWeek(2026-04-25) = 1 (7 → 8 → 1)
+    const before = apartmentForWeek(staleState, currentWeekStart(today))
+    expect(before).toBe(1)
+
+    const after = advance(staleState, today)
+    // Should pin to week of 2026-04-25 and advance to next apartment (2)
+    expect(after.anchorWeekStart).toBe('2026-04-25')
+    expect(after.anchorApartment).toBe(2)
+    // Verify current-week apartment is now the successor
+    expect(apartmentForWeek(after, currentWeekStart(today))).toBe(2)
   })
 })
