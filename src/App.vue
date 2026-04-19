@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useRotation } from '@/composables/useRotation'
 import { currentWeekStart } from '@/lib/dates'
+import HandDrawnCircle from '@/components/HandDrawnCircle.vue'
 
 const { state, apartment, weekRange, nextApartment, advance, apartmentForWeek } = useRotation()
 
@@ -125,24 +126,9 @@ function nextMonth() {
 
       <p class="label">THIS WEEK</p>
 
-      <div class="apt-wrapper">
-        <!-- Hand-drawn circle behind the number -->
-        <svg class="hand-circle hand-circle--large" viewBox="0 0 200 200" aria-hidden="true">
-          <path
-            d="M100 18
-               C 145 16, 184 42, 188 88
-               C 192 134, 158 178, 108 184
-               C 58 190, 16 158, 14 108
-               C 12 58, 48 20, 100 18Z"
-            fill="none"
-            stroke="var(--color-oxblood)"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+      <HandDrawnCircle :seed="apartment" class="apt-circle">
         <p class="apartment-number">#{{ apartment }}</p>
-      </div>
+      </HandDrawnCircle>
 
       <p class="range">{{ weekRange }}</p>
     </div>
@@ -190,23 +176,14 @@ function nextMonth() {
         >
           <span class="date-num">{{ cell.date }}</span>
           <span v-if="cell.isToday" class="today-dot"></span>
-          <span v-if="cell.apartment !== null" class="duty-badge">
-            <svg class="hand-circle hand-circle--small" viewBox="0 0 200 200" aria-hidden="true">
-              <path
-                d="M100 22
-                   C 142 18, 180 46, 183 92
-                   C 186 138, 155 175, 106 180
-                   C 57 185, 20 154, 18 106
-                   C 16 58, 52 26, 100 22Z"
-                fill="none"
-                stroke="var(--color-oxblood)"
-                stroke-width="5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+          <HandDrawnCircle
+            v-if="cell.apartment !== null"
+            :seed="cell.apartment"
+            :stroke-width="5"
+            class="duty-badge"
+          >
             <span class="duty-num">{{ cell.apartment }}</span>
-          </span>
+          </HandDrawnCircle>
         </div>
       </div>
     </div>
@@ -285,10 +262,8 @@ function nextMonth() {
   margin-bottom: 0.25rem;
 }
 
-.apt-wrapper {
-  position: relative;
-  display: inline-block;
-  margin: 0 auto;
+.apt-circle {
+  display: inline-flex;
 }
 
 .apartment-number {
@@ -297,18 +272,7 @@ function nextMonth() {
   font-weight: 900;
   line-height: 1;
   color: var(--color-ink);
-  position: relative;
-  z-index: 1;
   padding: 0.05em 0.15em;
-}
-
-/* Hand-drawn circle (large — around apartment number) */
-.hand-circle--large {
-  position: absolute;
-  inset: -8% -12%;
-  width: 124%;
-  height: 116%;
-  z-index: 0;
 }
 
 .range {
@@ -474,24 +438,11 @@ function nextMonth() {
 
 /* Duty badge: apartment number inside a hand-drawn circle */
 .duty-badge {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 1.6rem;
   height: 1.6rem;
 }
 
-.hand-circle--small {
-  position: absolute;
-  inset: -15%;
-  width: 130%;
-  height: 130%;
-}
-
 .duty-num {
-  position: relative;
-  z-index: 1;
   font-family: var(--font-display);
   font-size: 0.72rem;
   font-weight: 700;
