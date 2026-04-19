@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import { useRotation } from '@/composables/useRotation'
 
+const emit = defineEmits<{ (e: 'show-calendar'): void }>()
+
 const { apartment, weekRange, nextApartment, advance } = useRotation()
 
 const confirming = ref(false)
@@ -34,6 +36,8 @@ function cancel() {
       <button @click="confirm">Yes, advance</button>
       <button @click="cancel">Cancel</button>
     </div>
+
+    <button class="calendar-link" @click="$emit('show-calendar')">Calendar</button>
   </div>
 </template>
 
