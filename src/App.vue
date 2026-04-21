@@ -24,15 +24,31 @@ function cancelAdvance() {
 }
 
 // --- long-press override modal ---
+const LONG_PRESS_MS = 2000
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10
 const showOverride = ref(false)
 let pressTimer: ReturnType<typeof setTimeout> | null = null
+let pressOriginX = 0
+let pressOriginY = 0
 
-function onCardPointerDown() {
+function onCardPointerDown(e: PointerEvent) {
+  pressOriginX = e.clientX
+  pressOriginY = e.clientY
   pressTimer = setTimeout(() => {
     pressTimer = null
     if (navigator.vibrate) navigator.vibrate(50)
     showOverride.value = true
-  }, 3000)
+  }, LONG_PRESS_MS)
+}
+
+function onCardPointerMove(e: PointerEvent) {
+  if (pressTimer === null) return
+  const dx = e.clientX - pressOriginX
+  const dy = e.clientY - pressOriginY
+  if (dx * dx + dy * dy > LONG_PRESS_MOVE_TOLERANCE_PX * LONG_PRESS_MOVE_TOLERANCE_PX) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
 }
 
 function onCardPointerUp() {
@@ -156,6 +172,7 @@ function nextMonth() {
     <div
       class="paper-card main-card"
       @pointerdown.prevent="onCardPointerDown"
+      @pointermove="onCardPointerMove"
       @pointerup="onCardPointerUp"
       @pointerleave="onCardPointerUp"
       @pointercancel="onCardPointerUp"
