@@ -4,54 +4,83 @@ export const DEFAULT_ROTATION = [1, 2, 3, 4, 5, 7, 8] as const
 
 export interface RotationState {
   rotation: number[]
-  anchorWeekStart: string // ISO date, e.g. "2026-04-11"
-  anchorApartment: number
+  schedule: Record<string, number>
+  currentWeekStart: string
 }
 
 export const INITIAL_STATE: RotationState = {
   rotation: [...DEFAULT_ROTATION],
-  anchorWeekStart: '2026-04-11',
-  anchorApartment: 7,
+  schedule: { '2026-04-11': 7 },
+  currentWeekStart: '2026-04-18',
+}
+
+function isoFromDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 /**
- * Given the rotation state and a week-start Saturday,
- * returns the apartment number on duty that week.
+ * Returns the apartment on duty for the given week-start ISO.
+ * If the week is already scheduled, returns it verbatim. Otherwise
+ * computes it by walking from the nearest scheduled week along the
+ * rotation, writes the result into schedule, and returns it.
  */
-export function apartmentForWeek(state: RotationState, weekStart: Date): number {
-  const anchor = parseLocalDate(state.anchorWeekStart)
-  const offset = weeksBetween(anchor, weekStart)
-  const anchorIndex = state.rotation.indexOf(state.anchorApartment)
+export function apartmentForWeek(state: RotationState, weekStartISO: string): number {
+  const existing = state.schedule[weekStartISO]
+  if (existing !== undefined) return existing
+
+  const keys = Object.keys(state.schedule)
+  if (keys.length === 0) {
+    throw new Error('schedule is empty — cannot lazy-fill')
+  }
+
+  const target = parseLocalDate(weekStartISO)
+  let nearestISO = keys[0]
+  let nearestAbs = Math.abs(weeksBetween(parseLocalDate(nearestISO), target))
+  for (const k of keys) {
+    const abs = Math.abs(weeksBetween(parseLocalDate(k), target))
+    if (abs < nearestAbs) {
+      nearestISO = k
+      nearestAbs = abs
+    }
+  }
+
+  const offset = weeksBetween(parseLocalDate(nearestISO), target)
+  const nearestApt = state.schedule[nearestISO]
+  const nearestIdx = state.rotation.indexOf(nearestApt)
   const len = state.rotation.length
-  // JS modulo can go negative, so we add len to ensure positive
-  const idx = ((anchorIndex + offset) % len + len) % len
-  return state.rotation[idx]
+  const idx = ((nearestIdx + offset) % len + len) % len
+  const apt = state.rotation[idx]
+  state.schedule[weekStartISO] = apt
+  return apt
 }
 
 /**
- * Returns a new state with the rotation advanced by one position.
- * Pins the anchor to currentWeekStart(today) so the anchor never lags behind.
+ * Moves currentWeekStart forward by one week. If the pointer lags
+ * behind the real current week, snap to the real current week first,
+ * then advance.
  */
 export function advance(state: RotationState, today: Date = new Date()): RotationState {
-  const ws = currentWeekStart(today)
-  const currentApt = apartmentForWeek(state, ws)
-  const currentIndex = state.rotation.indexOf(currentApt)
-  const nextIndex = (currentIndex + 1) % state.rotation.length
-  const nextApt = state.rotation[nextIndex]
+  const realCurrentISO = isoFromDate(currentWeekStart(today))
+  const pointerDate = parseLocalDate(state.currentWeekStart)
+  const realCurrentDate = parseLocalDate(realCurrentISO)
 
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const iso = `${ws.getFullYear()}-${pad(ws.getMonth() + 1)}-${pad(ws.getDate())}`
+  const basisISO = pointerDate < realCurrentDate ? realCurrentISO : state.currentWeekStart
+  const basisDate = parseLocalDate(basisISO)
+  const nextDate = new Date(basisDate)
+  nextDate.setDate(nextDate.getDate() + 7)
 
   return {
     rotation: state.rotation,
-    anchorWeekStart: iso,
-    anchorApartment: nextApt,
+    schedule: state.schedule,
+    currentWeekStart: isoFromDate(nextDate),
   }
 }
 
 /**
- * Returns the apartment on duty for the current real-world week.
+ * Writes a single entry into the schedule. Does not cascade to any
+ * other week — adjacent scheduled entries are left untouched.
  */
-export function currentApartment(state: RotationState, today: Date = new Date()): number {
-  return apartmentForWeek(state, currentWeekStart(today))
+export function setApartmentForWeek(state: RotationState, weekStartISO: string, apt: number): void {
+  state.schedule[weekStartISO] = apt
 }

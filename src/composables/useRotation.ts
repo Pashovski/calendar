@@ -1,30 +1,52 @@
 import { ref, computed } from 'vue'
-import { currentWeekStart, formatRange } from '@/lib/dates'
+import { formatRange, parseLocalDate } from '@/lib/dates'
 import {
   apartmentForWeek,
   advance as advanceState,
-  currentApartment,
+  setApartmentForWeek,
   INITIAL_STATE,
   type RotationState,
 } from '@/lib/rotation'
 
 const STORAGE_KEY = 'garbage-app-state'
 
+function freshInitial(): RotationState {
+  return {
+    rotation: [...INITIAL_STATE.rotation],
+    schedule: { ...INITIAL_STATE.schedule },
+    currentWeekStart: INITIAL_STATE.currentWeekStart,
+  }
+}
+
 function load(): RotationState {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (raw) {
     try {
-      return JSON.parse(raw) as RotationState
+      const parsed = JSON.parse(raw) as Partial<RotationState>
+      if (
+        parsed &&
+        Array.isArray(parsed.rotation) &&
+        parsed.schedule &&
+        typeof parsed.currentWeekStart === 'string'
+      ) {
+        return parsed as RotationState
+      }
     } catch {
       // corrupted — fall through to seed
     }
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_STATE))
-  return { ...INITIAL_STATE, rotation: [...INITIAL_STATE.rotation] }
+  const seed = freshInitial()
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
+  return seed
 }
 
 function save(state: RotationState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+}
+
+function isoFromDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 const state = ref<RotationState>(load())
@@ -32,15 +54,17 @@ const state = ref<RotationState>(load())
 export function useRotation() {
   const today = computed(() => new Date())
 
-  const weekStart = computed(() => currentWeekStart(today.value))
+  const weekStart = computed(() => parseLocalDate(state.value.currentWeekStart))
 
-  const apartment = computed(() => currentApartment(state.value, today.value))
+  const apartment = computed(() =>
+    apartmentForWeek(state.value, state.value.currentWeekStart),
+  )
 
   const weekRange = computed(() => formatRange(weekStart.value))
 
   const nextApartment = computed(() => {
     const next = advanceState(state.value, today.value)
-    return next.anchorApartment
+    return apartmentForWeek(next, next.currentWeekStart)
   })
 
   function advance() {
@@ -49,15 +73,12 @@ export function useRotation() {
   }
 
   function setApartment(apt: number) {
-    const ws = currentWeekStart(today.value)
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const iso = `${ws.getFullYear()}-${pad(ws.getMonth() + 1)}-${pad(ws.getDate())}`
-    state.value = {
-      rotation: state.value.rotation,
-      anchorWeekStart: iso,
-      anchorApartment: apt,
-    }
+    setApartmentForWeek(state.value, state.value.currentWeekStart, apt)
     save(state.value)
+  }
+
+  function apartmentForWeekDate(s: RotationState, weekStart: Date): number {
+    return apartmentForWeek(s, isoFromDate(weekStart))
   }
 
   return {
@@ -68,6 +89,6 @@ export function useRotation() {
     nextApartment,
     advance,
     setApartment,
-    apartmentForWeek,
+    apartmentForWeek: apartmentForWeekDate,
   }
 }
