@@ -193,7 +193,9 @@ function nextMonth() {
           <HandDrawnCircle :seed="apartment" class="apt-circle">
             <span class="apt-stack">
               <p class="apartment-number">#{{ apartment }}</p>
-              <p v-if="RESIDENTS[apartment]" class="apartment-residents">{{ RESIDENTS[apartment] }}</p>
+              <span v-if="RESIDENTS[apartment]" class="apartment-residents">
+                <span v-for="name in RESIDENTS[apartment]" :key="name" class="apartment-resident">{{ name }}</span>
+              </span>
             </span>
           </HandDrawnCircle>
 
@@ -371,14 +373,21 @@ function nextMonth() {
 }
 
 .apartment-residents {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
   font-family: var(--font-mono);
   font-size: clamp(1rem, 5.8vh, 3rem);
   letter-spacing: 0.12em;
   color: var(--color-ink-muted);
-  white-space: nowrap;
   text-align: center;
+  line-height: 1.15;
   margin-top: -0.4em;
   padding: 0 0.15em;
+}
+
+.apartment-resident {
+  white-space: nowrap;
 }
 
 .range {
