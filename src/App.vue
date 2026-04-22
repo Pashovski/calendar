@@ -4,6 +4,7 @@ import { useRotation } from '@/composables/useRotation'
 import { currentWeekStart } from '@/lib/dates'
 import { DEFAULT_ROTATION } from '@/lib/rotation'
 import HandDrawnCircle from '@/components/HandDrawnCircle.vue'
+import { RESIDENTS } from '@/lib/residents'
 
 const { state, apartment, weekRange, nextApartment, advance, setApartment, apartmentForWeek } = useRotation()
 
@@ -190,7 +191,10 @@ function nextMonth() {
           <p class="label">THIS WEEK</p>
 
           <HandDrawnCircle :seed="apartment" class="apt-circle">
-            <p class="apartment-number">#{{ apartment }}</p>
+            <span class="apt-stack">
+              <p class="apartment-number">#{{ apartment }}</p>
+              <p v-if="RESIDENTS[apartment]" class="apartment-residents">{{ RESIDENTS[apartment] }}</p>
+            </span>
           </HandDrawnCircle>
 
           <p class="range">{{ weekRange }}</p>
@@ -351,6 +355,12 @@ function nextMonth() {
   display: inline-flex;
 }
 
+.apt-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .apartment-number {
   font-family: var(--font-display);
   font-size: clamp(6rem, 35vh, 18rem);
@@ -358,6 +368,17 @@ function nextMonth() {
   line-height: 1;
   color: var(--color-ink);
   padding: 0.05em 0.15em;
+}
+
+.apartment-residents {
+  font-family: var(--font-mono);
+  font-size: clamp(1rem, 5.8vh, 3rem);
+  letter-spacing: 0.12em;
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+  text-align: center;
+  margin-top: -0.4em;
+  padding: 0 0.15em;
 }
 
 .range {
