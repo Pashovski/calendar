@@ -148,3 +148,26 @@ describe('setApartmentForWeek', () => {
     expect(s.schedule['2026-04-25']).toBe(1)
   })
 })
+
+describe('calendar-week editing (integration)', () => {
+  it('persists an explicit override and leaves adjacent weeks unchanged', () => {
+    const s = freshState()
+    // Lazy-fill adjacent weeks first so we can assert they don't change.
+    apartmentForWeek(s, '2026-05-02') // = 2
+    apartmentForWeek(s, '2026-05-09') // = 3 (natural)
+    apartmentForWeek(s, '2026-05-16') // = 4
+
+    setApartmentForWeek(s, '2026-05-09', 2)
+
+    expect(apartmentForWeek(s, '2026-05-09')).toBe(2)
+    expect(apartmentForWeek(s, '2026-05-02')).toBe(2)
+    expect(apartmentForWeek(s, '2026-05-16')).toBe(4)
+  })
+
+  it('override takes effect on repeat reads', () => {
+    const s = freshState()
+    setApartmentForWeek(s, '2026-05-09', 5)
+    expect(apartmentForWeek(s, '2026-05-09')).toBe(5)
+    expect(apartmentForWeek(s, '2026-05-09')).toBe(5)
+  })
+})

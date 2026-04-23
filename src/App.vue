@@ -2,11 +2,20 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useRotation } from '@/composables/useRotation'
 import { currentWeekStart } from '@/lib/dates'
-import { DEFAULT_ROTATION } from '@/lib/rotation'
 import HandDrawnCircle from '@/components/HandDrawnCircle.vue'
+import ApartmentPicker from '@/components/ApartmentPicker.vue'
 import { RESIDENTS } from '@/lib/residents'
 
-const { state, apartment, weekRange, nextApartment, advance, setApartment, apartmentForWeek } = useRotation()
+const {
+  state,
+  apartment,
+  weekRange,
+  weekStart,
+  nextApartment,
+  advance,
+  setApartmentForWeek,
+  apartmentForWeek,
+} = useRotation()
 
 // --- advance confirmation ---
 const confirming = ref(false)
@@ -24,10 +33,31 @@ function cancelAdvance() {
   confirming.value = false
 }
 
-// --- long-press override modal ---
+// --- apartment picker (shared between home card long-press and calendar taps) ---
+const pickerWeek = ref<Date | null>(null)
+
+const pickerCurrentApt = computed(() =>
+  pickerWeek.value ? apartmentForWeek(state.value, pickerWeek.value) : 0,
+)
+
+function openPicker(ws: Date) {
+  pickerWeek.value = ws
+}
+
+function onPickerSelect(apt: number) {
+  if (pickerWeek.value) {
+    setApartmentForWeek(pickerWeek.value, apt)
+  }
+  pickerWeek.value = null
+}
+
+function onPickerCancel() {
+  pickerWeek.value = null
+}
+
+// --- long-press on home card opens picker for current week ---
 const LONG_PRESS_MS = 2000
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10
-const showOverride = ref(false)
 let pressTimer: ReturnType<typeof setTimeout> | null = null
 let pressOriginX = 0
 let pressOriginY = 0
@@ -38,7 +68,7 @@ function onCardPointerDown(e: PointerEvent) {
   pressTimer = setTimeout(() => {
     pressTimer = null
     if (navigator.vibrate) navigator.vibrate(50)
-    showOverride.value = true
+    openPicker(weekStart.value)
   }, LONG_PRESS_MS)
 }
 
@@ -59,20 +89,26 @@ function onCardPointerUp() {
   }
 }
 
-function selectOverride(apt: number) {
-  setApartment(apt)
-  showOverride.value = false
-}
-
-function dismissOverride(e: MouseEvent) {
-  if ((e.target as HTMLElement).classList.contains('overlay')) {
-    showOverride.value = false
-  }
-}
-
 onUnmounted(() => {
   if (pressTimer !== null) clearTimeout(pressTimer)
 })
+
+// --- calendar row tap ---
+const tappedWeekKey = ref<string | null>(null)
+
+function weekKey(ws: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${ws.getFullYear()}-${pad(ws.getMonth() + 1)}-${pad(ws.getDate())}`
+}
+
+function onWeekTap(ws: Date) {
+  const key = weekKey(ws)
+  tappedWeekKey.value = key
+  setTimeout(() => {
+    if (tappedWeekKey.value === key) tappedWeekKey.value = null
+  }, 150)
+  openPicker(ws)
+}
 
 // --- build stamp ---
 const buildStamp = `v1 \u00b7 ${__BUILD_DATE__}`
@@ -97,7 +133,13 @@ interface CalendarCell {
   currentWeek: boolean
 }
 
-const cells = computed((): CalendarCell[] => {
+interface CalendarWeek {
+  weekStart: Date
+  key: string
+  cells: CalendarCell[]
+}
+
+const weeks = computed((): CalendarWeek[] => {
   const year = viewYear.value
   const month = viewMonth.value
   const firstOfMonth = new Date(year, month, 1)
@@ -108,7 +150,7 @@ const cells = computed((): CalendarCell[] => {
   const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`
   const thisWeekStart = currentWeekStart(today)
 
-  const result: CalendarCell[] = []
+  const flat: CalendarCell[] = []
 
   function makeCell(dateObj: Date, dayOfMonth: number, inMonth: boolean): CalendarCell {
     const dow = dateObj.getDay()
@@ -127,21 +169,57 @@ const cells = computed((): CalendarCell[] => {
   const prevMonthDays = new Date(year, month, 0).getDate()
   for (let i = startDow - 1; i >= 0; i--) {
     const d = prevMonthDays - i
-    result.push(makeCell(new Date(year, month - 1, d), d, false))
+    flat.push(makeCell(new Date(year, month - 1, d), d, false))
   }
-
   for (let d = 1; d <= daysInMonth; d++) {
-    result.push(makeCell(new Date(year, month, d), d, true))
+    flat.push(makeCell(new Date(year, month, d), d, true))
   }
-
-  const remainder = result.length % 7
+  const remainder = flat.length % 7
   if (remainder > 0) {
     const fill = 7 - remainder
     for (let d = 1; d <= fill; d++) {
-      result.push(makeCell(new Date(year, month + 1, d), d, false))
+      flat.push(makeCell(new Date(year, month + 1, d), d, false))
     }
   }
 
+  const result: CalendarWeek[] = []
+  for (let i = 0; i < flat.length; i += 7) {
+    // The Saturday of this row is the first cell (grid starts on Sunday,
+    // but our week starts on Saturday — the leftmost cell's weekStart is
+    // the right answer for the whole row).
+    const rowCells = flat.slice(i, i + 7)
+    // Recover the date of the first cell to derive weekStart
+    // (Sunday column): use its associated weekStart.
+    // We need the original Date, which makeCell doesn't return — reconstruct.
+    const firstCell = rowCells[0]
+    // firstCell.date + inMonth flag is enough with viewYear/viewMonth to
+    // figure out the real date.
+    let baseYear = year
+    let baseMonth = month
+    if (!firstCell.inMonth) {
+      // Could be previous or next month. If its date > 15 it's previous month.
+      if (firstCell.date > 15) {
+        baseMonth = month - 1
+        if (baseMonth < 0) {
+          baseMonth = 11
+          baseYear = year - 1
+        }
+      } else {
+        baseMonth = month + 1
+        if (baseMonth > 11) {
+          baseMonth = 0
+          baseYear = year + 1
+        }
+      }
+    }
+    const firstDate = new Date(baseYear, baseMonth, firstCell.date)
+    const ws = currentWeekStart(firstDate)
+    result.push({
+      weekStart: ws,
+      key: weekKey(ws),
+      cells: rowCells,
+    })
+  }
   return result
 })
 
@@ -204,23 +282,15 @@ function nextMonth() {
       </Transition>
     </div>
 
-    <!-- Long-press override modal -->
-    <Teleport to="body">
-      <div v-if="showOverride" class="overlay" @click="dismissOverride">
-        <div class="override-modal">
-          <p class="override-title">Set apartment</p>
-          <button
-            v-for="apt in DEFAULT_ROTATION"
-            :key="apt"
-            class="override-btn"
-            :class="{ 'override-btn--active': apt === apartment }"
-            @click="selectOverride(apt)"
-          >
-            {{ apt }}
-          </button>
-        </div>
-      </div>
-    </Teleport>
+    <!-- Apartment picker (shared for home card + calendar) -->
+    <ApartmentPicker
+      v-if="pickerWeek"
+      :week-start="pickerWeek"
+      :rotation="state.rotation"
+      :current-apartment="pickerCurrentApt"
+      @select="onPickerSelect"
+      @cancel="onPickerCancel"
+    />
 
     <!-- Advance button -->
     <div class="advance">
@@ -253,26 +323,36 @@ function nextMonth() {
       </div>
 
       <div class="grid">
-        <div v-for="name in DAY_NAMES" :key="name" class="day-name">{{ name }}</div>
+        <div class="day-row">
+          <div v-for="name in DAY_NAMES" :key="name" class="day-name">{{ name }}</div>
+        </div>
         <div
-          v-for="(cell, i) in cells"
-          :key="i"
-          class="cell"
-          :class="{
-            'out-of-month': !cell.inMonth,
-            'current-week': cell.currentWeek,
-          }"
+          v-for="week in weeks"
+          :key="week.key"
+          class="week-row"
+          :class="{ 'week-row--tapped': tappedWeekKey === week.key }"
+          @click="onWeekTap(week.weekStart)"
         >
-          <span class="date-num">{{ cell.date }}</span>
-          <span v-if="cell.isToday" class="today-dot"></span>
-          <HandDrawnCircle
-            v-if="cell.apartment !== null"
-            :seed="cell.apartment"
-            :stroke-width="5"
-            class="duty-badge"
+          <div
+            v-for="(cell, i) in week.cells"
+            :key="i"
+            class="cell"
+            :class="{
+              'out-of-month': !cell.inMonth,
+              'current-week': cell.currentWeek,
+            }"
           >
-            <span class="duty-num">{{ cell.apartment }}</span>
-          </HandDrawnCircle>
+            <span class="date-num">{{ cell.date }}</span>
+            <span v-if="cell.isToday" class="today-dot"></span>
+            <HandDrawnCircle
+              v-if="cell.apartment !== null"
+              :seed="cell.apartment"
+              :stroke-width="5"
+              class="duty-badge"
+            >
+              <span class="duty-num">{{ cell.apartment }}</span>
+            </HandDrawnCircle>
+          </div>
         </div>
       </div>
 
@@ -498,9 +578,26 @@ function nextMonth() {
 
 /* ========== Calendar grid ========== */
 .grid {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.day-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  text-align: center;
+}
+
+.week-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 150ms ease;
+}
+
+.week-row--tapped {
+  background-color: var(--color-paper-warm);
 }
 
 .day-name {
@@ -589,62 +686,6 @@ function nextMonth() {
 .card-swap-enter-from {
   transform: translateY(-20px);
   opacity: 0;
-}
-
-/* ========== Override modal ========== */
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.override-modal {
-  background: var(--color-paper);
-  border-radius: 6px;
-  padding: 1.25rem 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 180px;
-}
-
-.override-title {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--color-ink-muted);
-  margin-bottom: 0.25rem;
-}
-
-.override-btn {
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--color-ink);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  width: 100%;
-  padding: 0.45rem 0;
-  cursor: pointer;
-  transition: background-color 0.1s ease;
-}
-
-.override-btn:hover {
-  background: var(--color-paper-warm);
-}
-
-.override-btn--active {
-  color: var(--color-oxblood);
-  border-color: var(--color-oxblood);
 }
 
 /* ========== Build stamp ========== */

@@ -77,6 +77,11 @@ export function useRotation() {
     save(state.value)
   }
 
+  function setApartmentForWeekDate(weekStart: Date, apt: number) {
+    setApartmentForWeek(state.value, isoFromDate(weekStart), apt)
+    save(state.value)
+  }
+
   function apartmentForWeekDate(s: RotationState, weekStart: Date): number {
     return apartmentForWeek(s, isoFromDate(weekStart))
   }
@@ -89,6 +94,7 @@ export function useRotation() {
     nextApartment,
     advance,
     setApartment,
+    setApartmentForWeek: setApartmentForWeekDate,
     apartmentForWeek: apartmentForWeekDate,
   }
 }
