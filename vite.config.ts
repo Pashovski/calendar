@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { resolve } from 'path'
 
 export default defineConfig({
+  base: '/calendar/',
   plugins: [
     vue(),
     VitePWA({
@@ -17,6 +18,20 @@ export default defineConfig({
         display: 'fullscreen',
         background_color: '#c8b89a',
         theme_color: '#7a1f2b',
+        icons: [
+          {
+            src: 'pwa-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
+            src: 'pwa-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+        ],
       },
     }),
   ],
