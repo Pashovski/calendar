@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRotation } from '@/composables/useRotation'
 import { currentWeekStart } from '@/lib/dates'
 import HandDrawnCircle from '@/components/HandDrawnCircle.vue'
@@ -55,43 +55,20 @@ function onPickerCancel() {
   pickerWeek.value = null
 }
 
-// --- long-press on home card opens picker for current week ---
-const LONG_PRESS_MS = 2000
-const LONG_PRESS_MOVE_TOLERANCE_PX = 10
-let pressTimer: ReturnType<typeof setTimeout> | null = null
-let pressOriginX = 0
-let pressOriginY = 0
+// --- tap on home card opens picker for current week ---
+const cardTapped = ref(false)
 
-function onCardPointerDown(e: PointerEvent) {
-  pressOriginX = e.clientX
-  pressOriginY = e.clientY
-  pressTimer = setTimeout(() => {
-    pressTimer = null
-    if (navigator.vibrate) navigator.vibrate(50)
-    openPicker(weekStart.value)
-  }, LONG_PRESS_MS)
+function onCardTap() {
+  openPicker(weekStart.value)
 }
 
-function onCardPointerMove(e: PointerEvent) {
-  if (pressTimer === null) return
-  const dx = e.clientX - pressOriginX
-  const dy = e.clientY - pressOriginY
-  if (dx * dx + dy * dy > LONG_PRESS_MOVE_TOLERANCE_PX * LONG_PRESS_MOVE_TOLERANCE_PX) {
-    clearTimeout(pressTimer)
-    pressTimer = null
-  }
+function onCardPressDown() {
+  cardTapped.value = true
 }
 
-function onCardPointerUp() {
-  if (pressTimer !== null) {
-    clearTimeout(pressTimer)
-    pressTimer = null
-  }
+function onCardPressEnd() {
+  cardTapped.value = false
 }
-
-onUnmounted(() => {
-  if (pressTimer !== null) clearTimeout(pressTimer)
-})
 
 // --- calendar row tap ---
 const tappedWeekKey = ref<string | null>(null)
@@ -250,11 +227,12 @@ function nextMonth() {
     <!-- Main card -->
     <div
       class="paper-card main-card"
-      @pointerdown.prevent="onCardPointerDown"
-      @pointermove="onCardPointerMove"
-      @pointerup="onCardPointerUp"
-      @pointerleave="onCardPointerUp"
-      @pointercancel="onCardPointerUp"
+      :class="{ 'main-card--tapped': cardTapped }"
+      @click="onCardTap"
+      @pointerdown="onCardPressDown"
+      @pointerup="onCardPressEnd"
+      @pointerleave="onCardPressEnd"
+      @pointercancel="onCardPressEnd"
     >
       <div class="paper-grain"></div>
       <!-- Thumbtack -->
@@ -295,14 +273,14 @@ function nextMonth() {
     <!-- Advance button -->
     <div class="advance">
       <div v-if="!confirming">
-        <button class="advance-btn" @click="handleAdvance">
+        <button class="advance-btn" @click.stop="handleAdvance">
           Mark week complete &rarr;
         </button>
       </div>
       <div v-else class="confirm-group">
         <p class="confirm-text">Pass the torch to apt {{ nextApartment }}?</p>
-        <button class="advance-btn advance-btn--confirm" @click="confirmAdvance">Yes, advance</button>
-        <button class="advance-btn advance-btn--cancel" @click="cancelAdvance">Cancel</button>
+        <button class="advance-btn advance-btn--confirm" @click.stop="confirmAdvance">Yes, advance</button>
+        <button class="advance-btn advance-btn--cancel" @click.stop="cancelAdvance">Cancel</button>
       </div>
     </div>
 
@@ -421,6 +399,13 @@ function nextMonth() {
 .main-card {
   padding: 2rem 1.5rem 1.5rem;
   text-align: center;
+  cursor: pointer;
+  transition: transform 100ms ease, background-color 100ms ease;
+}
+
+.main-card--tapped {
+  transform: scale(0.99);
+  background-color: var(--color-paper-warm);
 }
 
 .label {
